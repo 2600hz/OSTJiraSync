@@ -2,6 +2,7 @@
 
 require_once(INCLUDE_DIR.'/class.plugin.php');
 require_once(INCLUDE_DIR.'/class.forms.php');
+require_once('vendor/autoload.php');
 
 class jiraSyncConfig extends PluginConfig{
     function getOptions() {
@@ -119,7 +120,26 @@ class jiraSyncConfig extends PluginConfig{
 
     function pre_save(&$config, &$errors) {
         global $msg;
-       
+        
+        if($config['jira-ticket-var-id'] === $config['jira-status-var-id'])
+        {
+            $errors['err'] = "Your JIRA Ticket Number Field and JIRA Status Field cannot be the same.";
+            return false;
+        }
+        
+        $jiraCredsCheckResults = $this->validateJiraCreds($config['jira-host'], $config['jira-user'], $config['jira-password']);
+        
+        if($jiraCredsCheckResults !== true){
+            $errors['err'] = $jiraCredsCheckResults;
+            return false;
+        }
+        
+        json_decode($config['jira-json-responses']);
+        if(json_last_error() !== JSON_ERROR_NONE){
+            $errors['err'] = "Please check your JSON Response String. The current value is not valid JSON.";
+            return false;
+        }
+        
         $config['jira-password'] = Crypto::encrypt($config['jira-password'],
                 SECRET_SALT);
         return true;
@@ -162,6 +182,22 @@ class jiraSyncConfig extends PluginConfig{
          
      }
      
+     function validateJiraCreds($jiraHost, $jiraUser, $jiraPassword) {
+         try {
+             $board_service = new JiraRestApi\Board\BoardService(
+                     new JiraRestApi\Configuration\ArrayConfiguration(
+                             [
+                                 'jiraHost' => $jiraHost,
+                                 'jiraUser' => $jiraUser,
+                                 'jiraPassword' => $jiraPassword
+                             ]));
+             $board = $board_service->getBoardList();
+             return true;
+             } catch (JiraRestApi\JiraException $e) {
+                 return sprintf("JIRA credentials failed with a  code %d and message:<br>".PHP_EOL." %s .",$e->getCode(),$e->getMessage());
+             }
+    }
+     
      function getOsTicketStatus() {
         $statuses = TicketStatusList::getStatuses();
         $status_choices = array();
@@ -170,6 +206,6 @@ class jiraSyncConfig extends PluginConfig{
             $status_choices[$status->getId()] = $status->getName();
         }
         return $status_choices;
-     }
+    }
 
 }
