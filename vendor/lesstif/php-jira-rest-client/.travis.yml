@@ -1,0 +1,34 @@
+language: php
+
+php:
+  - 7.1
+  - 7.2
+  - 7.3
+  - 7.4
+
+before_install:
+  - travis_retry composer self-update
+  - travis_retry composer install --no-interaction --prefer-dist
+
+before_script:
+  - cp .env.example .env
+
+script:
+  - ./vendor/bin/phpunit --verbose tests/MockTest
+  - ./vendor/bin/phpunit --verbose tests/SerializeTest
+  - ./vendor/bin/phpunit --verbose tests/MapperTest
+
+jobs:
+  include:
+    - php: 7.1
+      env: TYPE=phpstan
+      script:
+        - vendor/bin/phpstan analyse
+    - php: 7.2
+      env: TYPE=phpstan
+      script:
+        - vendor/bin/phpstan analyse
+    - php: 7.3
+      env: TYPE=phpstan
+      script:
+        - vendor/bin/phpstan analyse
