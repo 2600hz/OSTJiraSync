@@ -121,27 +121,61 @@ class jiraSyncConfig extends PluginConfig{
     function pre_save(&$config, &$errors) {
         global $msg;
         
+        // Checks jira-json-responses for invalud JSON structure
+        $jiraResponses = json_decode($config['jira-json-responses']);
+        if(json_last_error() !== JSON_ERROR_NONE){
+            $errors['err'] = "Please check your JSON Response String. The current value is not valid JSON.";
+            return false;
+        }
+        
+        // checks for non-number keys in the decoded array (these aren't allowed)
+        if(array_keys($jiraResponses) !== range(0, count($jiraResponses) - 1)) {
+            $errors['err'] = "Please check your JSON Response String. It should not be an assoicative array at the root.";
+            return false;
+        }
+        
+        // iterates over all JSON array elements insuring reqired keys are all there
+        // and also that there aren't any un-supported keys
+        foreach($jiraResponses as $line => $response){
+            $reqiredKeys = ['old', 'new', 'message'];
+            $optionalKeys = ['continue', 'private','webhook'];
+            // Checks to insure all required keys are in the line
+            foreach($reqiredKeys as $reqiredKey) {
+                if (!array_key_exists($reqiredKey, $response)) {
+                    $errors['err'] = sprintf("Error in element %d of your JSON Response String. "
+                            . "There is no '%s' key. "
+                            . "This is required. (Array is 0 based)", $line, $reqiredKey);
+                    return false;
+                }
+            }
+            foreach($response as $key => $value) {
+                if (!in_array($key, $reqiredKeys)  && !in_array($key, $optionalKeys)) {
+                    $errors['err'] = sprintf("Error in element %d of your JSON Response String. "
+                            . "'%s' is not a supported field, "
+                            . "please remove it. (Array is 0 based)", $line, $key);
+                    return false;
+                }
+            }            
+        }
+        
+        // Makes sure the Jira ticket and jira status fields aren't the SAME!
         if($config['jira-ticket-var-id'] === $config['jira-status-var-id'])
         {
             $errors['err'] = "Your JIRA Ticket Number Field and JIRA Status Field cannot be the same.";
             return false;
         }
         
+        // Validates JIRA creds
         $jiraCredsCheckResults = $this->validateJiraCreds($config['jira-host'], $config['jira-user'], $config['jira-password']);
-        
         if($jiraCredsCheckResults !== true){
             $errors['err'] = $jiraCredsCheckResults;
             return false;
         }
         
-        json_decode($config['jira-json-responses']);
-        if(json_last_error() !== JSON_ERROR_NONE){
-            $errors['err'] = "Please check your JSON Response String. The current value is not valid JSON.";
-            return false;
-        }
-        
+        // Encrypts/saves password
         $config['jira-password'] = Crypto::encrypt($config['jira-password'],
                 SECRET_SALT);
+        
         return true;
      }
      
@@ -162,17 +196,12 @@ class jiraSyncConfig extends PluginConfig{
             if (in_array($field->getField()->getSelectName(), ['subject','message', 'priority'], true )){
                 continue;
             }
-            // skipping non-short-answer fields
-            // can't find a way to dierectly check they field, type
-            // So, since short answer fields should contain a size AND length config
-            // We will skip any fields that don't
-            if (!array_key_exists('size', $field->getField()->getConfiguration())) {
+            // gets the type of form for this field
+            $formtype = FormField::getFieldType($field->get('type'))[0];
+            // don't add unless it's a short answer type
+            if ($formtype !== "Short Answer") {
                 continue;
             }
-            if (!array_key_exists('length', $field->getField()->getConfiguration())) {
-                continue;
-            }
-            
             // adds fields that qualify
             $JiraFieldChoices[$field->getField()->getId()] = $field->getField()->getLabel();
             
