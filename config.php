@@ -138,7 +138,7 @@ class jiraSyncConfig extends PluginConfig{
         // and also that there aren't any un-supported keys
         foreach($jiraResponses as $line => $response){
             $reqiredKeys = ['old', 'new', 'message'];
-            $optionalKeys = ['continue', 'private','webhook'];
+            $optionalKeys = ['continue', 'private','webhook','jiraComment'];
             // Checks to insure all required keys are in the line
             foreach($reqiredKeys as $reqiredKey) {
                 if (!array_key_exists($reqiredKey, $response)) {
