@@ -211,19 +211,39 @@ class jiraSync extends Plugin {
                 if($oldStatusMatched && $newStatusMatched){
                     // replace supported varables.
                     $message = $statusResponse['message'];
+                    $message = str_replace("%ost-number%", $ticket->getNumber(), $message);
+                    $message = str_replace("%ost-id%", $ticket->getId(), $message);
                     $message = str_replace("%jira-hostname%", $jiraHost, $message);
                     $message = str_replace("%jira-ticket%", $jiraTicketNum, $message);
                     $message = str_replace("%jira-old-status%", $originalJiraStatus, $message);
                     $message = str_replace("%jira-new-status%", $jiraStatus, $message);
                     $this->postReplyTicket($ostTicketId, $message, $statusResponse['private']);
+                    
                     if(!empty($statusResponse['webhook'])){
                         // replace supported varables for webhook too (might need to make a function for this soon)
                         $webhook = $statusResponse['webhook'];
+                        $webhook = str_replace("%ost-number%", $ticket->getNumber(), $webhook);
+                        $webhook = str_replace("%ost-id%", $ticket->getId(), $webhook);
                         $webhook = str_replace("%jira-hostname%", $jiraHost, $webhook);
                         $webhook = str_replace("%jira-ticket%", $jiraTicketNum, $webhook);
                         $webhook = str_replace("%jira-old-status%", $originalJiraStatus, $webhook);
                         $webhook = str_replace("%jira-new-status%", $jiraStatus, $webhook);
                         file_get_contents($webhook);
+                    }
+                    if(!empty($statusResponse['jiraComment'])){
+                        // replace supported varables for jiraStatus too (Ok, last one and I'm functionizing it...)
+                        $jiraComment = $statusResponse['jiraComment'];
+                        $jiraComment = str_replace("%ost-number%", $ticket->getNumber(), $jiraComment);
+                        $jiraComment = str_replace("%ost-id%", $ticket->getId(), $jiraComment);
+                        $jiraComment = str_replace("%jira-hostname%", $jiraHost, $jiraComment);
+                        $jiraComment = str_replace("%jira-ticket%", $jiraTicketNum, $jiraComment);
+                        $jiraComment = str_replace("%jira-old-status%", $originalJiraStatus, $jiraComment);
+                        $jiraComment = str_replace("%jira-new-status%", $jiraStatus, $jiraComment);
+                        $result = $this->makeJiraComment($jiraTicketNum, $jiraHost, $jiraUser, $jiraPassword, $jiraComment);
+                        if($result !== true) {
+                            // post private ticket reply with error
+                            $this->postReplyTicket($ostTicketId, sprintf("Error posting JIRA comment: ",$result), true);
+                        }
                     }
                     // if $statusResponse['continue'] isn't true, return null to prevent any other replies
                     if(!$statusResponse['continue']){
@@ -266,6 +286,26 @@ class jiraSync extends Plugin {
             }
         }
             
+    }
+    
+    function makeJiraComment($jiraId, $jiraHost, $jiraUser, $jiraPassword, $message) {
+        try {
+            $issueService = new JiraRestApi\Issue\IssueService(
+                new JiraRestApi\Configuration\ArrayConfiguration(
+                        [
+                            'jiraHost' => $jiraHost,
+                            'jiraUser' => $jiraUser,
+                            'jiraPassword' => $jiraPassword
+                        ]));
+            // define $comment
+            $comment = new JiraRestApi\Issue\Comment;
+            $comment->setBody($message);
+            if($issueService->addComment($jiraId, $comment)){
+                return true;
+            }   
+        } catch (JiraRestApi\JiraException $e) {
+             return $e->getMessage();
+        }   
     }
     
     function getJiraStatus($jiraId, $jiraHost, $jiraUser, $jiraPassword) {
