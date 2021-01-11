@@ -216,13 +216,15 @@ class jiraSync extends Plugin {
                     $message = str_replace("%jira-old-status%", $originalJiraStatus, $message);
                     $message = str_replace("%jira-new-status%", $jiraStatus, $message);
                     $this->postReplyTicket($ostTicketId, $message, $statusResponse['private']);
-                    // replace supported varables for webhook too (might need to make a function for this soon)
-                    $webhook = $statusResponse['webhook'];
-                    $webhook = str_replace("%jira-hostname%", $jiraHost, $webhook);
-                    $webhook = str_replace("%jira-ticket%", $jiraTicketNum, $webhook);
-                    $webhook = str_replace("%jira-old-status%", $originalJiraStatus, $webhook);
-                    $webhook = str_replace("%jira-new-status%", $jiraStatus, $webhook);
-                    file_get_contents($webhook);
+                    if(!empty($statusResponse['webhook'])){
+                        // replace supported varables for webhook too (might need to make a function for this soon)
+                        $webhook = $statusResponse['webhook'];
+                        $webhook = str_replace("%jira-hostname%", $jiraHost, $webhook);
+                        $webhook = str_replace("%jira-ticket%", $jiraTicketNum, $webhook);
+                        $webhook = str_replace("%jira-old-status%", $originalJiraStatus, $webhook);
+                        $webhook = str_replace("%jira-new-status%", $jiraStatus, $webhook);
+                        file_get_contents($webhook);
+                    }
                     // if $statusResponse['continue'] isn't true, return null to prevent any other replies
                     if(!$statusResponse['continue']){
                         return null;
