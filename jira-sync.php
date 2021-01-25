@@ -157,21 +157,24 @@ class jiraSync extends Plugin {
 				$form = TicketForm::getInstance(); // singleton... I believe, so we could clean this up, but for now... whatever
 				$form->setTicketId($ticket->getId());
 				$form->addMissingFields();
-				$form->save(true);
+				$form->save(false);
 			} catch(Exception $e) {
 				$ost->logError(_S('JiraSync form field integrity check error, unable to add missing fields'), $e->getMessage(), $admin_alert);
 			}
 			*/
 
 			try {
+				// define $forms
+				$forms = DynamicFormEntry::forTicket($ticket->getId());
+
 				// iterate over all forms in a ticket
-				foreach($ticket->getForms() as $ticketForms) {
-					if($ticket->getTitle() !== 'Ticket Details') {
+				foreach($forms as $ticketForm) {
+					if($ticketForm->getTitle() !== 'Ticket Details') {
 						continue;
 					}
 
 					// define $form - form in interation is a "Ticket Details" form
-					$form = $ticketForms;
+					$form = $ticketForm;
 
 					// add missing fields
 					$form->addMissingFields();
