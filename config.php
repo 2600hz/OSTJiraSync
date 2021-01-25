@@ -53,9 +53,19 @@ class jiraSyncConfig extends PluginConfig{
                     'hint' => 'Please create/select an account for sending replies, account MUST be locked, still works.<br>Leave as "select" to attempt to use the assigned staff to send replies. (not reccomended)',
                 )
              ),
+            'jira-unseen-ticket-webhook' => new TextboxField([
+                'id' => 'jira-unseen-ticket-webhook',
+                'label' => 'Unseen Ticket Webhook (optional)',
+                'hint' => 'This webhook will be triggered when a previously unseen JIRA ticket is added to osTicket.',
+                'configuration' => array(
+                    'html' => FALSE,
+                    'size' => 40,
+                    'length' => 256
+                )
+            ]),
             'banned-projects' => new TextboxField([
                 'id' => 'banned-projects',
-                'label' => 'Banned Projects',
+                'label' => 'Banned Projects (optional)',
                 'hint' => 'Comma separated projects that are NOT allowed to be synced. For instance, if you did not want PRJA or PRJB tickets to be synced, you could enter “PRJA,PRJB” (without the quotes).',
                 'configuration' => array(
                     'html' => FALSE,
