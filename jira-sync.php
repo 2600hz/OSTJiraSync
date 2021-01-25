@@ -153,30 +153,22 @@ class jiraSync extends Plugin {
 					return null;
 				}
 			}
+                        
+                        // define $forms
+                        $forms = DynamicFormEntry::forTicket($ticket->getId());
+                        // iterate over all forms in a ticket
+                        foreach($forms as $ticketForm) {
+                                if($ticketForm->getTitle() !== 'Ticket Details') {
+                                        continue;
+                                }
+                                // define $form - form in interation is a "Ticket Details" form
+                                $form = $ticketForm;
+                                // add missing fields
+                                $form->addMissingFields();
+                                // save form
+                                $form->save(true);
+                        }
 
-			try {
-				// define $forms
-				$forms = DynamicFormEntry::forTicket($ticket->getId());
-
-				// iterate over all forms in a ticket
-				foreach($forms as $ticketForm) {
-					if($ticketForm->getTitle() !== 'Ticket Details') {
-						continue;
-					}
-
-					// define $form - form in interation is a "Ticket Details" form
-					$form = $ticketForm;
-
-					// add missing fields
-					$form->addMissingFields();
-
-					// save form
-					$form->save(true);
-				}
-			} catch(Exception $e) {
-				$ost->logError(_S('JiraSync updateJiraTracking exception occurred, unable to add missing fields'), $e->getMessage(), true);
-				return;
-			}
 			
 			// getting current JIRA status in osTicket
 			$field = $ticket->getField($jiraTikStatusFieldId);
@@ -212,9 +204,10 @@ class jiraSync extends Plugin {
 				}
                                 
                                 // Send a webook if this is a previously unseen JIRA ticket
-                                if(isJiraUnseen($jiraTicketNum)){
+                                if($this->isJiraUnseen($jiraTicketNum, $ostTicketId)){                                    
                                     // If it's configured that is...
                                     if(!empty($config->get('jira-unseen-ticket-webhook'))){
+                                        
                                         $webhook = $config->get('jira-unseen-ticket-webhook');
                                         $webhook = str_replace("%ost-number%", $ticket->getNumber(), $webhook);
                                         $webhook = str_replace("%ost-id%", $ticket->getId(), $webhook);
@@ -222,10 +215,10 @@ class jiraSync extends Plugin {
                                         $webhook = str_replace("%jira-ticket%", $jiraTicketNum, $webhook);
                                         $webhook = str_replace("%jira-old-status%", $originalJiraStatus, $webhook);
                                         $webhook = str_replace("%jira-new-status%", $jiraStatus, $webhook);
+                                        file_put_contents("findmeh.log", $webhook, FILE_APPEND | LOCK_EX);
                                         file_get_contents($webhook);
                                     }
                                 }
-            
                                 
 				// Find the first matching response and send it!
 				foreach ($jiraStatusResponses as $statusResponse)
@@ -298,7 +291,7 @@ class jiraSync extends Plugin {
 				}
 			}
 		} catch(Exception $e) {
-			$ost->logError(_S('JiraSync updateJiraTracking exception occurred'), $e->getMessage(), true);
+                    $ost->logError('JiraSync updateJiraTracking exception occurred', $e->getMessage(), true);
 		}
     }
     
@@ -454,7 +447,7 @@ class jiraSync extends Plugin {
         $ticket->LogNote('Jira Sync Tool',sprintf('The JIRA status was manually changed from "%s" to "%s". Please do not do this! This has been automatically reverted to "%s".', $oldFieldData, $newFieldData, $oldFieldData));
     }
     
-    function isJiraUnseen($jiraTicketNum){
+    function isJiraUnseen($jiraTicketNum, $ostTicketId){
         // load config
         if(!$config = $this->getConfig()){ return null; }
         
@@ -482,8 +475,11 @@ class jiraSync extends Plugin {
         $jira_tickets = Ticket::objects()->filter(array($cdataField => $jiraTicketNum));
         
         foreach($jira_tickets as $ticket){
-            $isNewJiraTicket = False;
-            break;
+            // got to make sure it's not our own osticket ticket we found :) 
+            if($ticket->ht['ticket_id'] !== $ostTicketId) {
+                $isNewJiraTicket = False;
+                break;
+            }
         }
         
         return $isNewJiraTicket;
