@@ -215,7 +215,6 @@ class jiraSync extends Plugin {
                                         $webhook = str_replace("%jira-ticket%", $jiraTicketNum, $webhook);
                                         $webhook = str_replace("%jira-old-status%", $originalJiraStatus, $webhook);
                                         $webhook = str_replace("%jira-new-status%", $jiraStatus, $webhook);
-                                        file_put_contents("findmeh.log", $webhook, FILE_APPEND | LOCK_EX);
                                         file_get_contents($webhook);
                                     }
                                 }
