@@ -372,6 +372,16 @@ class jiraSync extends Plugin {
                         ->filter(array(sprintf('cdata__%s__exact', $jiraTicketNumberFieldSelectName) => false));
                 
                 foreach($jira_tickets as $ticket){
+					try{
+						// ensure form field integrity before pass to updateJiraTracking
+						$form = TicketForm::getInstance(); // singleton... I believe, so we could clean this up, but for now... whatever
+						$form->setTicketId($ticket->getId());
+						$form->addMissingFields();
+						$form->save(true);
+					} catch(Exception $e){
+						echo 'Error caught during form field integrity check: ' . $e->getMessage() . "\n";
+					}
+
                     // do da update!
                     $this->updateJiraTracking($ticket->getId());
                 }
