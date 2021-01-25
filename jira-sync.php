@@ -69,7 +69,7 @@ class jiraSync extends Plugin {
                     $newFieldData = $object_data['fields'][$jiraTikNumFieldId][1];
                     
                     if($oldFieldData != $newFieldData){
-                        $this->updateJiraTracking($ticket_id, $newFieldData, $oldFieldData);
+                       $this->updateJiraTracking($ticket_id, $newFieldData, $oldFieldData);
                     }
                 }
                 // LLets see if this is for a change to the JIRA status field
@@ -87,6 +87,15 @@ class jiraSync extends Plugin {
     }
     
     function updateJiraTracking($ostTicketId, $jiraTicketNum=null, $oldJiraTicketNum=null) {
+		try {
+			$form = TicketForm::getInstance(); // singleton... I believe, so we could clean this up, but for now... whatever
+			$form->setTicketId($ostTicketId);
+			$form->addMissingFields();
+			$form->save(true);
+		} catch(Exception $e) {
+			$ost->logError(_S('JiraSync form field integrity check error, unable to add missing fields'), $e->getMessage(), $admin_alert);
+		}
+
         // load config
         if(!$config = $this->getConfig()){ return null; }
         if(!$jiraTikNumFieldId = $config->get('jira-ticket-var-id')){ return null; }
