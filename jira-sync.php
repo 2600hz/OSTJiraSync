@@ -417,7 +417,7 @@ class jiraSync extends Plugin {
 		// if current time is greater than or equal to next run time (last run + frequency interval)
 		if(time() >= $last_run + ($freq_in_config * 3600)) {
 			// reset last run time
-			$config->set('last-run', $now);
+			$config->set('last-run', time());
 
 			return true;
 		}
