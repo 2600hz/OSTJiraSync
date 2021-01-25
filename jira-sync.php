@@ -408,28 +408,21 @@ class jiraSync extends Plugin {
     // credit for this function: 
     // https://github.com/clonemeagain/plugin-autocloser/blob/master/class.CloserPlugin.php
     private function is_time_to_run(PluginConfig $config) {
-        // We can store arbitrary things in the config, like, when we ran this last:
+		// define last_run
         $last_run = $config->get('last-run');
-        $now = Misc::dbtime(); // Never assume about time.. 
-        $config->set('last-run', $now);
 
-        // assume a freqency of "Every Cron" means it is always overdue
-        $next_run = 0;
+		// define $freq_in_config
+		$freq_in_config = (int) $config->get('purge-frequency');
+		
+		// if current time is greater than or equal to next run time (last run + frequency interval)
+		if(time() >= $last_run + ($freq_in_config * 3600)) {
+			// reset last run time
+			$config->set('last-run', $now);
 
-        // Convert purge frequency to a comparable format to timestamps:
-        if ($freq_in_config = (int) $config->get('purge-frequency')) {
-            // Calculate when we want to run next, config hours into seconds,
-            // plus the last run is the timestamp of the next scheduled run
-            $next_run = $last_run + ($freq_in_config * 3600);
-        }
-
-        // See if it's time to check old tickets
-        // If we don't have a next_run, it's because we want it to run
-        // If the next run is in the past, then we are overdue, so, lets go!
-        if (!$next_run || $now > $next_run) {
-            return TRUE;
-        }
-        return FALSE;
+			return true;
+		}
+		
+		return false;
     }
 
 }
