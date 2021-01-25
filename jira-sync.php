@@ -154,17 +154,6 @@ class jiraSync extends Plugin {
 				}
 			}
 
-			/*
-			try {
-				$form = TicketForm::getInstance(); // singleton... I believe, so we could clean this up, but for now... whatever
-				$form->setTicketId($ticket->getId());
-				$form->addMissingFields();
-				$form->save(false);
-			} catch(Exception $e) {
-				$ost->logError(_S('JiraSync form field integrity check error, unable to add missing fields'), $e->getMessage(), $admin_alert);
-			}
-			*/
-
 			try {
 				// define $forms
 				$forms = DynamicFormEntry::forTicket($ticket->getId());
@@ -216,11 +205,28 @@ class jiraSync extends Plugin {
 				$field->setValue($jiraStatus);
 				$field->save();
 
-				# Set the osTicket status (if the status isn't empty that is)
+				// Set the osTicket status (if the status isn't empty that is)
 				if($config->get('jira-ost-status')) {
 					$ticket->status = $config->get('jira-ost-status');
 					$ticket->save();
 				}
+                                
+                                // Send a webook if this is a previously unseen JIRA ticket
+                                if(isJiraUnseen($jiraTicketNum)){
+                                    // If it's configured that is...
+                                    if(!empty($config->get('jira-unseen-ticket-webhook'))){
+                                        $webhook = $config->get('jira-unseen-ticket-webhook');
+                                        $webhook = str_replace("%ost-number%", $ticket->getNumber(), $webhook);
+                                        $webhook = str_replace("%ost-id%", $ticket->getId(), $webhook);
+                                        $webhook = str_replace("%jira-hostname%", $jiraHost, $webhook);
+                                        $webhook = str_replace("%jira-ticket%", $jiraTicketNum, $webhook);
+                                        $webhook = str_replace("%jira-old-status%", $originalJiraStatus, $webhook);
+                                        $webhook = str_replace("%jira-new-status%", $jiraStatus, $webhook);
+                                        file_get_contents($webhook);
+                                    }
+                                }
+            
+                                
 				// Find the first matching response and send it!
 				foreach ($jiraStatusResponses as $statusResponse)
 				{
@@ -447,6 +453,42 @@ class jiraSync extends Plugin {
         
         $ticket->LogNote('Jira Sync Tool',sprintf('The JIRA status was manually changed from "%s" to "%s". Please do not do this! This has been automatically reverted to "%s".', $oldFieldData, $newFieldData, $oldFieldData));
     }
+    
+    function isJiraUnseen($jiraTicketNum){
+        // load config
+        if(!$config = $this->getConfig()){ return null; }
+        
+        $isNewJiraTicket = True;
+        
+        // We need to get the select name for the field we use to track JIRA
+        // ticket numbers. This is the var where we will store it.
+        // Next few lines find it
+        $jiraTicketNumberFieldSelectName = null;
+        
+        // get the generic Ticket Form
+        $ticket_form = DynamicForm::objects()->filter(array('type'=>'T'))[0];
+        
+        // Finds the field used to track the JIRA ticket number
+        foreach ($ticket_form->getDynamicFields() as $field) {
+            if($field->getField()->getId() == $config->get('jira-ticket-var-id'))
+            {
+                // gets the select name from it and saves it
+                $jiraTicketNumberFieldSelectName = $field->getField()->getSelectName();
+            }
+        }
+        
+        $cdataField = sprintf('cdata__%s__exact', $jiraTicketNumberFieldSelectName);
+        
+        $jira_tickets = Ticket::objects()->filter(array($cdataField => $jiraTicketNum));
+        
+        foreach($jira_tickets as $ticket){
+            $isNewJiraTicket = False;
+            break;
+        }
+        
+        return $isNewJiraTicket;
+    }
+
     // credit for this function: 
     // https://github.com/clonemeagain/plugin-autocloser/blob/master/class.CloserPlugin.php
     private function is_time_to_run(PluginConfig $config) {
