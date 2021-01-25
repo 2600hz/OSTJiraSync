@@ -88,15 +88,6 @@ class jiraSync extends Plugin {
     
     function updateJiraTracking($ostTicketId, $jiraTicketNum=null, $oldJiraTicketNum=null) {
 		try {
-			$form = TicketForm::getInstance(); // singleton... I believe, so we could clean this up, but for now... whatever
-			$form->setTicketId($ostTicketId);
-			$form->addMissingFields();
-			$form->save(true);
-		} catch(Exception $e) {
-			$ost->logError(_S('JiraSync form field integrity check error, unable to add missing fields'), $e->getMessage(), $admin_alert);
-		}
-
-		try {
 			// load config
 			if(!$config = $this->getConfig()){ return null; }
 			if(!$jiraTikNumFieldId = $config->get('jira-ticket-var-id')){ return null; }
@@ -109,6 +100,7 @@ class jiraSync extends Plugin {
 			$jiraStatusResponses = json_decode($jiraJsonStatusResponses, true);
 			if (JSON_ERROR_NONE !== json_last_error()) { return null; }
 			$ticket = Ticket::lookup($ostTicketId);
+
 			
 			// Disallow the direct change of JIRA ticket numbers
 			// Make the user remove the current JIRA ticket first, then add a new one if needed
@@ -116,7 +108,7 @@ class jiraSync extends Plugin {
 			if(!empty($jiraTicketNum) && !empty($oldJiraTicketNum) ){
 				$field = $ticket->getField($jiraTikNumFieldId);
 				$field->setValue($oldJiraTicketNum);
-				$field->save();
+				$field->save(true);
 				$ticket->LogNote('Jira Sync Tool', 'Please do not change the JIRA ticket number once set! If you need to do this, please delete the current value first, then change it to another value. This change has been reverted. Thank you!', null);
 				return null;
 			}
@@ -126,7 +118,7 @@ class jiraSync extends Plugin {
 			if(empty($jiraTicketNum) && !empty($oldJiraTicketNum) ){
 				$field = $ticket->getField($jiraTikStatusFieldId);
 				$field->setValue(null);
-				$field->save();
+				$field->save(true);
 				return null;
 			}
 			
@@ -158,6 +150,37 @@ class jiraSync extends Plugin {
 					//return null if no value was retrieved from the field
 					return null;
 				}
+			}
+
+			/*
+			try {
+				$form = TicketForm::getInstance(); // singleton... I believe, so we could clean this up, but for now... whatever
+				$form->setTicketId($ticket->getId());
+				$form->addMissingFields();
+				$form->save(true);
+			} catch(Exception $e) {
+				$ost->logError(_S('JiraSync form field integrity check error, unable to add missing fields'), $e->getMessage(), $admin_alert);
+			}
+			*/
+
+			try {
+				// iterate over all forms in a ticket
+				foreach($ticket->getForms() as $ticketForms) {
+					if($ticket->getTitle() !== 'Ticket Details') {
+						continue;
+					}
+
+					// define $form - form in interation is a "Ticket Details" form
+					$form = $ticketForms;
+
+					// add missing fields
+					$form->addMissingFields();
+
+					// save form
+					$form->save(true);
+				}
+			} catch(Exception $e) {
+				$ost->logError(_S('JiraSync updateJiraTracking exception occurred, unable to add missing fields'), $e->getMessage(), $admin_alert);
 			}
 			
 			// getting current JIRA status in osTicket
