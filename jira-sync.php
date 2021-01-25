@@ -87,6 +87,8 @@ class jiraSync extends Plugin {
     }
     
     function updateJiraTracking($ostTicketId, $jiraTicketNum=null, $oldJiraTicketNum=null) {
+		global $ost;
+
 		try {
 			// load config
 			if(!$config = $this->getConfig()){ return null; }
@@ -183,7 +185,8 @@ class jiraSync extends Plugin {
 					$form->save(true);
 				}
 			} catch(Exception $e) {
-				$ost->logError(_S('JiraSync updateJiraTracking exception occurred, unable to add missing fields'), $e->getMessage(), $admin_alert);
+				$ost->logError(_S('JiraSync updateJiraTracking exception occurred, unable to add missing fields'), $e->getMessage(), true);
+				return;
 			}
 			
 			// getting current JIRA status in osTicket
@@ -289,7 +292,7 @@ class jiraSync extends Plugin {
 				}
 			}
 		} catch(Exception $e) {
-			$ost->logError(_S('JiraSync updateJiraTracking exception occurred'), $e->getMessage(), $admin_alert);
+			$ost->logError(_S('JiraSync updateJiraTracking exception occurred'), $e->getMessage(), true);
 		}
     }
     
