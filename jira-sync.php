@@ -204,7 +204,9 @@ class jiraSync extends Plugin {
 				}
                                 
                                 // Send a webook if this is a previously unseen JIRA ticket
-                                if($this->isJiraUnseen($jiraTicketNum, $ostTicketId)){                                    
+                                // empty($originalJiraStatus) is included so that this isn't sent on every single status change :)
+                                // only on the original one
+                                if($this->isJiraUnseen($jiraTicketNum, $ostTicketId) && empty($originalJiraStatus)){                                    
                                     // If it's configured that is...
                                     if(!empty($config->get('jira-unseen-ticket-webhook'))){
                                         
