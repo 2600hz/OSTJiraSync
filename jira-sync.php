@@ -323,7 +323,7 @@ class jiraSync extends Plugin {
                 global $thisstaff;
                 $thisstaff = $robot;
                 $errors = '';
-                $ticket->postReply(['response' => $reply], $errors, TRUE, FALSE);
+                $ticket->postReply(['response' => $reply], $errors, true);
                 $thisstaff = null;
             }
         }
