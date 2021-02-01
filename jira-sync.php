@@ -144,6 +144,26 @@ class jiraSync extends Plugin {
 					
 				}
 			}
+                       
+                        // strip off any non printable characters from the JIRA ticket
+                        if (urlencode($jiraTicketNum) !== $jiraTicketNum){
+                            $printableJira = trim(preg_replace('/[^A-Za-z0-9\-]/', '', $jiraTicketNum));
+                            if(urlencode($printableJira) === $printableJira){
+                                $field = $ticket->getField($jiraTikNumFieldId);
+                                $field->setValue($printableJira);
+                                $field->save();
+                                $jiraTicketNum = $printableJira;
+                            } else {				
+                                $field = $ticket->getField($jiraTikNumFieldId);
+                                $field->setValue(null);
+                                $field->save();
+                                $field = $ticket->getField($jiraTikStatusFieldId);
+                                $field->setValue(null);
+                                $field->save();
+                                $ticket->LogNote('Jira Sync Tool', 'The ticket number contained special characters and could not be fixed.'.urlencode($printableJira), null);
+			
+                            }
+                        }
 			
 			// load the JIRA ticket number from the osTicket if it is'nt loaded already
 			if(!$jiraTicketNum) {
