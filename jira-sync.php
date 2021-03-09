@@ -86,41 +86,83 @@ class jiraSync extends Plugin {
         
     }
     
-    function updateJiraTracking($ostTicketId, $jiraTicketNum=null, $oldJiraTicketNum=null) {
+    function updateJiraTracking($ostTicketId, $currentJiraTicketNumber = null, $previousJiraTicketNumber = null) {
 		global $ost;
 
 		try {
 			// load config
-			if(!$config = $this->getConfig()){ return null; }
-			if(!$jiraTikNumFieldId = $config->get('jira-ticket-var-id')){ return null; }
-			if(!$jiraTikStatusFieldId = $config->get('jira-status-var-id')){ return null; }
-			if(!$jiraJsonStatusResponses = $config->get('jira-json-responses')){ return null; }
-			if(!$jiraHost = $config->get('jira-host')){ return null; }
-			if(!$jiraUser = $config->get('jira-user')){ return null; }
-			if(!$jiraPassword = Crypto::decrypt($config->get('jira-password'),
-					SECRET_SALT)){ return null; }
-			$jiraStatusResponses = json_decode($jiraJsonStatusResponses, true);
-			if (JSON_ERROR_NONE !== json_last_error()) { return null; }
-			$ticket = Ticket::lookup($ostTicketId);
+			if(!$config = $this->getConfig()) {
+				return null; 
+			}
 
-			
-			// Disallow the direct change of JIRA ticket numbers
-			// Make the user remove the current JIRA ticket first, then add a new one if needed
-			// This allows for messages to be passed 
-			if(!empty($jiraTicketNum) && !empty($oldJiraTicketNum) ){
-				$field = $ticket->getField($jiraTikNumFieldId);
-				$field->setValue($oldJiraTicketNum);
-				$field->save(true);
-				$ticket->LogNote('Jira Sync Tool', 'Please do not change the JIRA ticket number once set! If you need to do this, please delete the current value first, then change it to another value. This change has been reverted. Thank you!', null);
+			if(!$jiraTicketNumberFieldId = $config->get('jira-ticket-var-id')) {
 				return null;
 			}
+
+			if(!$jiraTicketStatusFieldId = $config->get('jira-status-var-id')) {
+				return null;
+			}
+
+			if(!$jiraStatusResponses = $config->get('jira-json-responses')) {
+				return null;
+			} else {
+				$jiraStatusResponses = json_decode($jiraStatusResponses, true);
+
+				if(json_last_error()) {
+					return null;
+				}
+			}
+
+			if(!$jiraHost = $config->get('jira-host')) {
+				return null;
+			}
+
+			if(!$jiraUser = $config->get('jira-user')) {
+				return null;
+			}
+
+			if(!$jiraPassword = Crypto::decrypt($config->get('jira-password'), SECRET_SALT)) {
+				return null;
+			}
+
+			// define $currentJiraTicketNumber - sanitize and normalize
+			$currentJiraTicketNumber = preg_replace('/[^a-zA-Z0-9-]+/', '', $currentJiraTicketNumber);
+
+
+			// define $previousJiraTicketNumber - sanitize and normalize
+			$previousJiraTicketNumber = preg_replace('/[^a-zA-Z0-9-]+/', '', $previousJiraTicketNumber);
+
+			// define $ticket
+			$ticket = Ticket::lookup($ostTicketId);
+
+			// define $jiraTicketNumberField
+			$jiraTicketNumberField = $ticket->getField($jiraTicketNumberFieldId);
+
+			// define $jiraTicketStatusField
+			$jiraTicketStatusField = $ticket->getField($jiraTicketStatusFieldId);
+
+			if(!$currentJiraTicketNumber) {
+				// define $currentJiraTicketNumber
+				if(!($currentJiraTicketNumber = $jiraTicketNumberField->getAnswer()->getValue())) {
+					// unable to retrieve currentJiraTicketNumber from ticket
+					return null;
+				}
+			}
 			
-			// If the old JIRA ticket number is not empty, but the new one is
-			// The we are removing the sync. Lets remember to remove the status too!
-			if(empty($jiraTicketNum) && !empty($oldJiraTicketNum) ){
-				$field = $ticket->getField($jiraTikStatusFieldId);
-				$field->setValue(null);
-				$field->save(true);
+			// jira ticket identity must be explicitly removed
+			if($currentJiraTicketNumber && $previousJiraTicketNumber) {
+				$jiraTicketNumberField->setValue($previousJiraTicketNumber);
+				$jiraTicketNumberField->save(true);
+
+				$ticket->LogNote('Jira Sync Tool', 'Please do not change the JIRA ticket number once set! If you need to do this, please delete the current value first, then change it to another value. This change has been reverted. Thank you!', null);
+
+				return null;
+			}
+
+			// no current jira ticket number, remove status from ticket, remove sync
+			if(!$currentJiraTicketNumber && $previousJiraTicketNumber) {
+				$jiraTicketStatusField->setValue(null);
+				$jiraTicketStatusField->save(true);
 				return null;
 			}
 			
@@ -129,93 +171,111 @@ class jiraSync extends Plugin {
 				// gets the project of the ticket by stripping off
 				// everythign after the first - char
 				// Then upper cases it
-				$project = strtoupper(substr($jiraTicketNum, 0, strpos($jiraTicketNum, "-")));
+				$project = strtoupper(substr($currentJiraTicketNumber, 0, strpos($currentJiraTicketNumber, "-")));
 				$bannedProjects = explode(",", strtoupper($config->get('banned-projects')));
 				
 				if(in_array($project, $bannedProjects)) {
-					$field = $ticket->getField($jiraTikNumFieldId);
-					$field->setValue(null);
-					$field->save();
-					$field = $ticket->getField($jiraTikStatusFieldId);
-					$field->setValue(null);
-					$field->save();
-				$ticket->LogNote('Jira Sync Tool', sprintf('The %s project type is not allowed to be synced by plugin settings.', $project), null);
-				return null;
-					
-				}
-			}
-                       
-                        // strip off any non printable characters from the JIRA ticket
-                        if (urlencode($jiraTicketNum) !== $jiraTicketNum){
-                            $printableJira = trim(preg_replace('/[^A-Za-z0-9\-]/', '', $jiraTicketNum));
-                            if(urlencode($printableJira) === $printableJira){
-                                $field = $ticket->getField($jiraTikNumFieldId);
-                                $field->setValue($printableJira);
-                                $field->save();
-                                $jiraTicketNum = $printableJira;
-                            } else {				
-                                $field = $ticket->getField($jiraTikNumFieldId);
-                                $field->setValue(null);
-                                $field->save();
-                                $field = $ticket->getField($jiraTikStatusFieldId);
-                                $field->setValue(null);
-                                $field->save();
-                                $ticket->LogNote('Jira Sync Tool', 'The ticket number contained special characters and could not be fixed.'.urlencode($printableJira), null);
-			
-                            }
-                        }
-			
-			// load the JIRA ticket number from the osTicket if it is'nt loaded already
-			if(!$jiraTicketNum) {
-				$field = $ticket->getField($jiraTikNumFieldId);
-				if(!$jiraTicketNum = $field->getAnswer()->getValue()){
-					//return null if no value was retrieved from the field
+					// unset jira ticket number field
+					$jiraTicketNumberField->setValue(null);
+					$jiraTicketNumberField->save();
+
+					// unset jira status field
+					$jiraTicketStatusField->setValue(null);
+					$jiraTicketStatusField->save();
+
+					$ticket->LogNote('Jira Sync Tool', sprintf('The %s project type is not allowed to be synced by plugin settings.', $project), null);
+
 					return null;
 				}
 			}
-                        
-                        // define $forms
-                        $forms = DynamicFormEntry::forTicket($ticket->getId());
-                        // iterate over all forms in a ticket
-                        foreach($forms as $ticketForm) {
-                                if($ticketForm->getTitle() !== 'Ticket Details') {
-                                        continue;
-                                }
-                                // define $form - form in interation is a "Ticket Details" form
-                                $form = $ticketForm;
-                                // add missing fields
-                                $form->addMissingFields();
-                                // save form
-                                $form->save(true);
-                        }
 
+			$jiraTicketNumberField->setValue($currentJiraTicketNumber);
+			$jiraTicketNumberField->save();
+
+			/*
+            // strip off any non printable characters from the JIRA ticket
+            if (urlencode($jiraTicketNum) !== $jiraTicketNum){
+                $printableJira = trim(preg_replace('/[^A-Za-z0-9\-]/', '', $jiraTicketNum));
+                if(urlencode($printableJira) === $printableJira){
+                    $field = $ticket->getField($jiraTikNumFieldId);
+                    $field->setValue($printableJira);
+                    $field->save();
+                    $jiraTicketNum = $printableJira;
+                } else {				
+                    $field = $ticket->getField($jiraTikNumFieldId);
+                    $field->setValue(null);
+                    $field->save();
+                    $field = $ticket->getField($jiraTikStatusFieldId);
+                    $field->setValue(null);
+                    $field->save();
+                    $ticket->LogNote('Jira Sync Tool', 'The ticket number contained special characters and could not be fixed.'.urlencode($printableJira), null);
 			
-			// getting current JIRA status in osTicket
-			$field = $ticket->getField($jiraTikStatusFieldId);
-			$originalJiraStatus = $field->getAnswer()->getValue();
+                }
+            }
+				*/
+
+			/*
+			if(!$currentJiraTicketNumber) {
+				// define $currentJiraTicketNumber
+				if(!($currentJiraTicketNumber = $jiraTicketNumberField->getAnswer()->getValue())) {
+					// unable to retrieve currentJiraTicketNumber from ticket
+					return null;
+				}
+			}
+			*/
+ 
+			if(!$jiraTicketNumberField || !$jiraTicketStatusField) {                       
+				// define $forms
+				$forms = DynamicFormEntry::forTicket($ticket->getId());
+
+				// iterate over all forms in a ticket
+				foreach($forms as $ticketForm) {
+					if($ticketForm->getTitle() !== 'Ticket Details') {
+						continue;
+					}
+
+					// define $form - form in interation is a "Ticket Details" form
+					$form = $ticketForm;
+
+					// add missing fields
+					$form->addMissingFields();
+
+					// save form
+					$form->save(true);
+				}
+			}
+			
+			// define $previousJiraStatus
+			$previousJiraStatus = $jiraTicketStatusField->getAnswer()->getValue();
 			
 			// getting current JIRA status from JIRA
-			$jiraStatus = $this->getJiraStatus($jiraTicketNum, $jiraHost, $jiraUser, $jiraPassword);
+			if(!($currentJiraStatus = $this->getJiraStatus($currentJiraTicketNumber, $jiraHost, $jiraUser, $jiraPassword))) {
+				// unable to retrieve current jira status
+				return null;
+			}
+
+			// define $debug
+			//$debug = ['jira' => ['current' => $currentJiraStatus, 'previous' => $previousJiraStatus]];
 			
-			// don't do anything if the returned jiraStatus is empty/null
-			if(!$jiraStatus) { return null; }
-			
-			// don't do anything if the old and the new jira status are the same!
-			if($originalJiraStatus == $jiraStatus) { return null; }
+			// current and previous jira status match - do nothing
+			if($currentJiraStatus == $previousJiraStatus) {
+				return null;
+			}
 			
 			if ($jiraStatus == 'unavailable') {
-				$field = $ticket->getField($jiraTikNumFieldId);
-				$field->setValue(null);
-				$field->save();
-				$field = $ticket->getField($jiraTikStatusFieldId);
-				$field->setValue(null);
-				$field->save();
+				// unset jira ticket number
+				$jiraTicketNumberField->setValue(null);
+				$jiraTicketNumberField->save();
+
+				// unset jira status
+				$jiraTicketStatusField->setValue(null);
+				$jiraTicketStatusField->save();
+
 				$ticket->LogNote('Jira Sync Tool', 'The input JIRA ticket was invalid. So, it has been removed. Please try again', null);
 			} else {
 				// update the current status osTicket field and save it!
-				$field = $ticket->getField($jiraTikStatusFieldId);
-				$field->setValue($jiraStatus);
-				$field->save();
+				$jiraTicketStatusField->setValue($currentJiraStatus);
+				$jiraTicketStatusField->save();
 
 				// Set the osTicket status (if the status isn't empty that is)
 				if($config->get('jira-ost-status')) {
@@ -223,23 +283,23 @@ class jiraSync extends Plugin {
 					$ticket->save();
 				}
                                 
-                                // Send a webook if this is a previously unseen JIRA ticket
-                                // empty($originalJiraStatus) is included so that this isn't sent on every single status change :)
-                                // only on the original one
-                                if($this->isJiraUnseen($jiraTicketNum, $ostTicketId) && empty($originalJiraStatus)){                                    
-                                    // If it's configured that is...
-                                    if(!empty($config->get('jira-unseen-ticket-webhook'))){
-                                        
-                                        $webhook = $config->get('jira-unseen-ticket-webhook');
-                                        $webhook = str_replace("%ost-number%", $ticket->getNumber(), $webhook);
-                                        $webhook = str_replace("%ost-id%", $ticket->getId(), $webhook);
-                                        $webhook = str_replace("%jira-hostname%", $jiraHost, $webhook);
-                                        $webhook = str_replace("%jira-ticket%", $jiraTicketNum, $webhook);
-                                        $webhook = str_replace("%jira-old-status%", $originalJiraStatus, $webhook);
-                                        $webhook = str_replace("%jira-new-status%", $jiraStatus, $webhook);
-                                        file_get_contents($webhook);
-                                    }
-                                }
+                // Send a webook if this is a previously unseen JIRA ticket
+                // empty($previousJiraStatus) is included so that this isn't sent on every single status change :)
+                // only on the original one
+                if($this->isJiraUnseen($currentJiraTicketNumber, $ostTicketId) && empty($previousJiraStatus)){
+                    // If it's configured that is...
+                    if(!empty($config->get('jira-unseen-ticket-webhook'))){
+                        
+                        $webhook = $config->get('jira-unseen-ticket-webhook');
+                        $webhook = str_replace("%ost-number%", $ticket->getNumber(), $webhook);
+                        $webhook = str_replace("%ost-id%", $ticket->getId(), $webhook);
+                        $webhook = str_replace("%jira-hostname%", $jiraHost, $webhook);
+                        $webhook = str_replace("%jira-ticket%", $currentJiraTicketNumber, $webhook);
+                        $webhook = str_replace("%jira-old-status%", $previousJiraStatus, $webhook);
+                        $webhook = str_replace("%jira-new-status%", $currentJiraStatus, $webhook);
+                        file_get_contents($webhook);
+                    }
+                }
                                 
 				// Find the first matching response and send it!
 				foreach ($jiraStatusResponses as $statusResponse)
@@ -247,22 +307,22 @@ class jiraSync extends Plugin {
 					$oldStatusMatched = false;
 					$newStatusMatched = false;
 					
-					if(is_null($statusResponse['old']) &&  empty($originalJiraStatus) ){
+					if(is_null($statusResponse['old']) &&  empty($previousJiraStatus) ){
 						$oldStatusMatched = true;
 					}
 					if($statusResponse['old'] === "any"){
 						$oldStatusMatched = true;
 					}
-					if($statusResponse['old'] === $originalJiraStatus){
+					if($statusResponse['old'] === $previousJiraStatus){
 						$oldStatusMatched = true;
 					}
-					if(is_null($statusResponse['new']) &&  empty($jiraStatus) ){
+					if(is_null($statusResponse['new']) &&  empty($currentJiraStatus) ){
 						$newStatusMatched = true;
 					}
 					if($statusResponse['new'] === "any"){
 						$newStatusMatched = true;
 					}
-					if($statusResponse['new'] === $jiraStatus){
+					if($statusResponse['new'] === $currentJiraStatus){
 						$newStatusMatched = true;
 					}
 					
@@ -273,9 +333,9 @@ class jiraSync extends Plugin {
 						$message = str_replace("%ost-number%", $ticket->getNumber(), $message);
 						$message = str_replace("%ost-id%", $ticket->getId(), $message);
 						$message = str_replace("%jira-hostname%", $jiraHost, $message);
-						$message = str_replace("%jira-ticket%", $jiraTicketNum, $message);
-						$message = str_replace("%jira-old-status%", $originalJiraStatus, $message);
-						$message = str_replace("%jira-new-status%", $jiraStatus, $message);
+						$message = str_replace("%jira-ticket%", $currentJiraTicketNumber, $message);
+						$message = str_replace("%jira-old-status%", $previousJiraStatus, $message);
+						$message = str_replace("%jira-new-status%", $currentJiraStatus, $message);
 						$this->postReplyTicket($ostTicketId, $message, $statusResponse['private']);
 						
 						if(!empty($statusResponse['webhook'])){
@@ -284,9 +344,9 @@ class jiraSync extends Plugin {
 							$webhook = str_replace("%ost-number%", $ticket->getNumber(), $webhook);
 							$webhook = str_replace("%ost-id%", $ticket->getId(), $webhook);
 							$webhook = str_replace("%jira-hostname%", $jiraHost, $webhook);
-							$webhook = str_replace("%jira-ticket%", $jiraTicketNum, $webhook);
-							$webhook = str_replace("%jira-old-status%", $originalJiraStatus, $webhook);
-							$webhook = str_replace("%jira-new-status%", $jiraStatus, $webhook);
+							$webhook = str_replace("%jira-ticket%", $currentJiraTicketNumber, $webhook);
+							$webhook = str_replace("%jira-old-status%", $previousJiraStatus, $webhook);
+							$webhook = str_replace("%jira-new-status%", $currentJiraStatus, $webhook);
 							file_get_contents($webhook);
 						}
 						if(!empty($statusResponse['jiraComment'])){
@@ -295,10 +355,10 @@ class jiraSync extends Plugin {
 							$jiraComment = str_replace("%ost-number%", $ticket->getNumber(), $jiraComment);
 							$jiraComment = str_replace("%ost-id%", $ticket->getId(), $jiraComment);
 							$jiraComment = str_replace("%jira-hostname%", $jiraHost, $jiraComment);
-							$jiraComment = str_replace("%jira-ticket%", $jiraTicketNum, $jiraComment);
-							$jiraComment = str_replace("%jira-old-status%", $originalJiraStatus, $jiraComment);
-							$jiraComment = str_replace("%jira-new-status%", $jiraStatus, $jiraComment);
-							$result = $this->makeJiraComment($jiraTicketNum, $jiraHost, $jiraUser, $jiraPassword, $jiraComment);
+							$jiraComment = str_replace("%jira-ticket%", $currentJiraTicketNumber, $jiraComment);
+							$jiraComment = str_replace("%jira-old-status%", $previousJiraStatus, $jiraComment);
+							$jiraComment = str_replace("%jira-new-status%", $currentJiraStatus, $jiraComment);
+							$result = $this->makeJiraComment($currentJiraTicketNumber, $jiraHost, $jiraUser, $jiraPassword, $jiraComment);
 							if($result !== true) {
 								// post private ticket reply with error
 								$this->postReplyTicket($ostTicketId, sprintf("Error posting JIRA comment: ",$result), true);
@@ -434,7 +494,6 @@ class jiraSync extends Plugin {
                         ->filter(array(sprintf('cdata__%s__exact', $jiraTicketNumberFieldSelectName) => false));
                 
                 foreach($jira_tickets as $ticket){
-
                     // do da update!
                     $this->updateJiraTracking($ticket->getId());
                 }
