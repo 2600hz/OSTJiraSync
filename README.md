@@ -1,6 +1,6 @@
 # OSTJiraSync
 
-Install
+## Install
 
 cd to osTicket Plugin Directory
 git clone https://github.com/2600hz/OSTJiraSync.git jira-sync
