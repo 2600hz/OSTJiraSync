@@ -8,7 +8,7 @@
 4. git clone https://github.com/lesstif/php-jira-rest-client.git
 
 ## JSON Response String
-In the configuration page, you will see a field for JSON Response String. This is where the vast majority of the functionality of this plugin comes into play. The JSON Response String is a JSON array of responses to give when a status changes given and old and new status. This array will be iterated over until a match is found and executed. Each array element must have fields for "new", "old" and "message". "new" and "old" related to the matching previous an newly updated JIRA status and can be either null, "any" or the status you want to match. "message" is the message to send in the ticket. A simple example would be this:
+In the configuration page, most everything is pretty self-explanitory, to me as least :). But, you will see a field for JSON Response String and this needs quite a bit of explanation. This is where the vast majority of the functionality of this plugin comes into play. The JSON Response String is a JSON array of responses to give when a status changes given and old and new status. This array will be iterated over until a match is found and executed. Each array element must have fields for "new", "old" and "message". "new" and "old" related to the matching previous an newly updated JIRA status and can be either null, "any" or the status you want to match. "message" is the message to send in the ticket. A simple example would be this:
 
 ``` json
 [
