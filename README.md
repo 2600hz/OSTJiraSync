@@ -30,7 +30,7 @@ On the configuration page, most everything is pretty self-explanatory, to me as 
   }
 ]
 ```
-I've cheated a bit here and used the optional "continue" field. More on that in a moment. Basically, this would always tell your client about the automation when they first have a ticket associated with their osTicket ticket. Then, give them a status update when it's opened and closed.
+I've cheated a bit here and used the optional "continue" field. More on that in a moment. Basically, this would always tell your client about the automation when they first have a JIRA ticket associated with their osTicket ticket. Then, give them a status update when it's opened and closed.
 
 While this is pretty cool, it's also pretty limited. Here's some optional fields you can use to up your game a bit more...
 
