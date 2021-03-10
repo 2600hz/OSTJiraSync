@@ -8,7 +8,7 @@
 4. git clone https://github.com/lesstif/php-jira-rest-client.git
 
 ## JSON Response String
-On the configuration page, most everything is pretty self-explanatory, to me as least :). But, you will see a field for JSON Response String, and this needs quite a bit of explanation. This is where the vast majority of the functionality of this plugin comes into play. The JSON Response String is a JSON array of responses to give when a status changes given and old and new status. This array will be iterated over until a match is found and executed. Each array element must have fields for "new", "old" and "message". "new" and "old" relating to the matching previous a newly updated JIRA status. They can be either null, "any" or the status you want to match. "message" is the message to send in the ticket. A simple example would be this:
+On the configuration page, most everything is pretty self-explanatory, to me as least :). But, you will see a field for JSON Response String, and this needs quite a bit of explanation. This is where the vast majority of the functionality of this plugin comes into play. The JSON Response String is a JSON array of responses to give when a status changes given an old and new status. This array will be iterated over until a match is found and executed. Each array element must have fields for "new", "old" and "message". "new" and "old" relating to the matching previous and newly updated JIRA statuses respetively. They can be either null, "any" or the status you want to match. "message" is the message to send in the ticket. A simple example would be this:
 
 ``` json
 [
@@ -30,7 +30,7 @@ On the configuration page, most everything is pretty self-explanatory, to me as 
   }
 ]
 ```
-I've cheated a bit here and used the optional "continue". More on that in a moment. Basically, this would tell your client when they have been subscribed to a new JIRA ticket. Then, give them a status update when it's opened and closed.
+I've cheated a bit here and used the optional "continue" field. More on that in a moment. Basically, this would always tell your client when they have been subscribed to a new JIRA ticket when they were first subscribed. Then, give them a status update when it's opened and closed.
 
 While this is pretty cool, it's also pretty limited. Here's some optional fields you can use to up your game a bit more...
 
@@ -113,6 +113,6 @@ You may have noticed in my last example I cheated again. I used variables withou
 * %jira-old-status% : The JIRA ticket status prior to update
 * %jira-new-status% : The newly updated JIRA status
 
-Please note: The standard osticket variable system does NOT work. Apologies, we just didn't need it. Maybe someone will come along and add it?
+Please note, the standard osticket variable system does NOT work in this plugin. Apologies, we just didn't need it. Maybe someone will come along and add it?
 
 Well, that's it. I hope you enjoy this tool!
