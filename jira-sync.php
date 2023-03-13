@@ -287,16 +287,12 @@ class jiraSync extends Plugin {
                 // empty($previousJiraStatus) is included so that this isn't sent on every single status change :)
                 // only on the original one
                 if($this->isJiraUnseen($currentJiraTicketNumber, $ostTicketId) && empty($previousJiraStatus)){
+                    Signal::send('new.jira', $currentJiraTicketNumber);
+                    
                     // If it's configured that is...
                     if(!empty($config->get('jira-unseen-ticket-webhook'))){
                         
                         $webhook = $config->get('jira-unseen-ticket-webhook');
-                        $webhook = str_replace("%ost-number%", $ticket->getNumber(), $webhook);
-                        $webhook = str_replace("%ost-id%", $ticket->getId(), $webhook);
-                        $webhook = str_replace("%jira-hostname%", $jiraHost, $webhook);
-                        $webhook = str_replace("%jira-ticket%", $currentJiraTicketNumber, $webhook);
-                        $webhook = str_replace("%jira-old-status%", $previousJiraStatus, $webhook);
-                        $webhook = str_replace("%jira-new-status%", $currentJiraStatus, $webhook);
                         file_get_contents($webhook);
                     }
                 }
@@ -330,34 +326,19 @@ class jiraSync extends Plugin {
 					if($oldStatusMatched && $newStatusMatched){
 						// replace supported varables.
 						$message = $statusResponse['message'];
-						$message = str_replace("%ost-number%", $ticket->getNumber(), $message);
-						$message = str_replace("%ost-id%", $ticket->getId(), $message);
-						$message = str_replace("%jira-hostname%", $jiraHost, $message);
-						$message = str_replace("%jira-ticket%", $currentJiraTicketNumber, $message);
-						$message = str_replace("%jira-old-status%", $previousJiraStatus, $message);
-						$message = str_replace("%jira-new-status%", $currentJiraStatus, $message);
+            $message = $this->parse_message_vars($message, $ticket, $currentJiraTicketNumber, $previousJiraStatus, $currentJiraStatus);
 						$this->postReplyTicket($ostTicketId, $message, $statusResponse['private']);
 						
 						if(!empty($statusResponse['webhook'])){
 							// replace supported varables for webhook too (might need to make a function for this soon)
 							$webhook = $statusResponse['webhook'];
-							$webhook = str_replace("%ost-number%", $ticket->getNumber(), $webhook);
-							$webhook = str_replace("%ost-id%", $ticket->getId(), $webhook);
-							$webhook = str_replace("%jira-hostname%", $jiraHost, $webhook);
-							$webhook = str_replace("%jira-ticket%", $currentJiraTicketNumber, $webhook);
-							$webhook = str_replace("%jira-old-status%", $previousJiraStatus, $webhook);
-							$webhook = str_replace("%jira-new-status%", $currentJiraStatus, $webhook);
+              $webhook = $this->parse_message_vars($webhook, $ticket, $currentJiraTicketNumber, $previousJiraStatus, $currentJiraStatus);
 							file_get_contents($webhook);
 						}
 						if(!empty($statusResponse['jiraComment'])){
 							// replace supported varables for jiraStatus too (Ok, last one and I'm functionizing it...)
 							$jiraComment = $statusResponse['jiraComment'];
-							$jiraComment = str_replace("%ost-number%", $ticket->getNumber(), $jiraComment);
-							$jiraComment = str_replace("%ost-id%", $ticket->getId(), $jiraComment);
-							$jiraComment = str_replace("%jira-hostname%", $jiraHost, $jiraComment);
-							$jiraComment = str_replace("%jira-ticket%", $currentJiraTicketNumber, $jiraComment);
-							$jiraComment = str_replace("%jira-old-status%", $previousJiraStatus, $jiraComment);
-							$jiraComment = str_replace("%jira-new-status%", $currentJiraStatus, $jiraComment);
+              $jiraComment = $this->parse_message_vars($jiraComment, $ticket, $currentJiraTicketNumber, $previousJiraStatus, $currentJiraStatus);
 							$result = $this->makeJiraComment($currentJiraTicketNumber, $jiraHost, $jiraUser, $jiraPassword, $jiraComment);
 							if($result !== true) {
 								// post private ticket reply with error
@@ -374,6 +355,30 @@ class jiraSync extends Plugin {
 		} catch(Exception $e) {
                     $ost->logError('JiraSync updateJiraTracking exception occurred', $e->getMessage(), true);
 		}
+    }
+
+    function parse_message_vars($message, $ticket, $currentJiraTicketNumber, $previousJiraStatus, $currentJiraStatus){
+      $config = $this->getConfig();
+      $jiraHost = $config->get('jira-host');
+
+      // support old way of doing vars
+      $message = str_replace("%ost-number%", $ticket->getNumber(), $message);
+      $message = str_replace("%ost-id%", $ticket->getId(), $message);
+      $message = str_replace("%jira-hostname%", $jiraHost, $message);
+      $message = str_replace("%jira-ticket%", $currentJiraTicketNumber, $message);
+      $message = str_replace("%jira-old-status%", $previousJiraStatus, $message);
+      $message = str_replace("%jira-new-status%", $currentJiraStatus, $message);
+
+      // import our vars for replacement in the osTicket way
+      $our_vars = [
+          'ost-number' => $ticket->getNumber(),
+          'ost-id' => $ticket->getId(),
+          'jira-hostname' => $config->get('jira-host'),
+          'jira-ticket' => $currentJiraTicketNumber,
+          'jira-old-status' => $previousJiraStatus,
+          'jira-new-status' => $currentJiraStatus
+      ];
+      return $ticket->replaceVars($message, $our_vars);
     }
     
     function postReplyTicket($ticketId, $reply, $private=false){
