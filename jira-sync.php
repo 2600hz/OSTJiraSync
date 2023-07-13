@@ -102,7 +102,7 @@ class jiraSync extends Plugin {
       if(!$config = $this->getConfig()){ return null; }
       if(!$jiraTikNumFieldId = $config->get('jira-ticket-var-id')){ return null; }
       if(!$jiraTikStatusFieldId = $config->get('jira-status-var-id')){ return null; }
-      
+
       $object_as_array = (array) $object;
       if(property_exists($object, "ht")){
         if(isset($object->ht['data'])) {
@@ -130,7 +130,7 @@ class jiraSync extends Plugin {
             if($oldFieldData != $newFieldData){
               $this->updateJiraTracking($ticket_id, $newFieldData, $oldFieldData);
             }
-            
+
             // unset jira status field if its empty now!
             if(empty($newFieldData)){
               $jiraTicketStatusField = $ticket->getField($jiraTikStatusFieldId);
@@ -141,7 +141,7 @@ class jiraSync extends Plugin {
               }
             }
           }
-          
+
           // Lets see if this is for a change to the JIRA status field
           if(isset($object_data['fields'][$jiraTikStatusFieldId])){
             $oldFieldData = $object_data['fields'][$jiraTikStatusFieldId][0];
@@ -332,6 +332,8 @@ class jiraSync extends Plugin {
           }
         }
 
+        
+
 				// Find the first matching response and send it!
 				foreach ($jiraStatusResponses as $statusResponse)
 				{
@@ -495,6 +497,10 @@ class jiraSync extends Plugin {
 
             $issue = $issueService->get($jiraId, $queryParam);
 
+            if($issue->key !== $jiraId){
+              $this->fix_ost_has_outdated_jira_keys($jiraId, $issue->key);
+            }
+
             $status = strtolower($issue->fields->status->name);
             return $status;
         } catch (JiraRestApi\JiraException $e) {
@@ -505,6 +511,50 @@ class jiraSync extends Plugin {
             }
         }
     }
+
+    function fix_ost_has_outdated_jira_keys($old_key, $new_key) {
+      $config = $this->getConfig();
+      
+      // get the generic Ticket Form
+      $ticket_form = DynamicForm::objects()->filter(array('type'=>'T'))[0];
+      // Finds the field used to track the JIRA ticket number
+      foreach ($ticket_form->getDynamicFields() as $field) {
+        if($field->getField()->getId() == $config->get('jira-ticket-var-id'))
+        {
+            // gets the select name from it and saves it
+            $jiraTicketNumberFieldSelectName = $field->getField()->getSelectName();
+        }
+      }
+      $tickets_needing_update = Ticket::objects()->filter(array('status__state' => 'open'))
+        ->filter(array(sprintf('cdata__%s__exact', $jiraTicketNumberFieldSelectName) => $old_key));
+      foreach($tickets_needing_update as $ticket_needing_update) {
+        $jiraTicketNumberField = $ticket_needing_update->getField($config->get('jira-ticket-var-id'));
+        $jiraTicketNumberField->setValue($new_key);
+        $jiraTicketNumberField->save();
+      }
+      
+    }
+    function send_slack_message_old($message) {
+        $curl = curl_init();
+
+        curl_setopt_array($curl, array(
+            CURLOPT_URL => 'https://hooks.slack.com/services/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',
+            CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_ENCODING => '',
+            CURLOPT_MAXREDIRS => 10,
+            CURLOPT_TIMEOUT => 0,
+            CURLOPT_FOLLOWLOCATION => true,
+            CURLOPT_HTTP_VERSION => CURL_HTTP_VERSION_1_1,
+            CURLOPT_CUSTOMREQUEST => 'POST',
+            CURLOPT_POSTFIELDS => json_encode(array("text" => $message)),
+            CURLOPT_HTTPHEADER => array(
+                'Content-Type: application/json'
+            ),
+        ));
+
+        $response = curl_exec($curl);
+    }
+
 
     function snapBackJiraStatusChanges($ticket_id, $newFieldData, $oldFieldData) {
         // Automatically reverts manual changes to JIRA status!
