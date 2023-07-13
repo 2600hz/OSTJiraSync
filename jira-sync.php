@@ -534,28 +534,7 @@ class jiraSync extends Plugin {
       }
       
     }
-    function send_slack_message_old($message) {
-        $curl = curl_init();
-
-        curl_setopt_array($curl, array(
-            CURLOPT_URL => 'https://hooks.slack.com/services/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',
-            CURLOPT_RETURNTRANSFER => true,
-            CURLOPT_ENCODING => '',
-            CURLOPT_MAXREDIRS => 10,
-            CURLOPT_TIMEOUT => 0,
-            CURLOPT_FOLLOWLOCATION => true,
-            CURLOPT_HTTP_VERSION => CURL_HTTP_VERSION_1_1,
-            CURLOPT_CUSTOMREQUEST => 'POST',
-            CURLOPT_POSTFIELDS => json_encode(array("text" => $message)),
-            CURLOPT_HTTPHEADER => array(
-                'Content-Type: application/json'
-            ),
-        ));
-
-        $response = curl_exec($curl);
-    }
-
-
+	
     function snapBackJiraStatusChanges($ticket_id, $newFieldData, $oldFieldData) {
         // Automatically reverts manual changes to JIRA status!
 
