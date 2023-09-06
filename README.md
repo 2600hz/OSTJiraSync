@@ -1,5 +1,15 @@
 # OSTJiraSync
 
+
+## Reporting an issue
+If you have an issue, please feel free to open an issue in this project and I'll have a look when I'm able. If you do please make sure you follow these guidelines:
+1. @wildernesstechie in your issue please. 2600Hz is a telecommunications platform development company. This is just a VERY small piece in that puzzle and I'm not on the main development team. So, I don't get notifications unless you specfically @ me.
+2. Please ensure that you can repilcate your issue from scratch using the offical docker image https://hub.docker.com/r/osticket/osticket
+3. Please give me the exact steps you used to replicate your issue
+4. Please understand that this is a very small part of my job here at 2600Hz. So it may take time for me to look at your issue and when I do if I'm not immeidatly able to replicate using your info from #2 & #3, I'll have to close the issue out until I have better information.
+
+Thanks! I hope you find the plugin useful!
+
 ## Install
 
 1. cd to osTicket Plugin Directory
