@@ -2,7 +2,6 @@
 
 require_once(INCLUDE_DIR.'/class.plugin.php');
 require_once(INCLUDE_DIR.'/class.forms.php');
-require_once('vendor/autoload.php');
 
 class jiraSyncConfig extends PluginConfig{
     function getOptions() {
@@ -12,7 +11,7 @@ class jiraSyncConfig extends PluginConfig{
                 $disabled_staff[$s->getId()] = $s->getName();
             }
         }
-        
+
         return array(
             'frequency' => new ChoiceField(
                     array(
@@ -130,20 +129,20 @@ class jiraSyncConfig extends PluginConfig{
 
     function pre_save(&$config, &$errors) {
         global $msg;
-        
+
         // Checks jira-json-responses for invalud JSON structure
         $jiraResponses = json_decode($config['jira-json-responses']);
         if(json_last_error() !== JSON_ERROR_NONE){
             $errors['err'] = "Please check your JSON Response String. The current value is not valid JSON.";
             return false;
         }
-        
+
         // checks for non-number keys in the decoded array (these aren't allowed)
         if(array_keys($jiraResponses) !== range(0, count($jiraResponses) - 1)) {
             $errors['err'] = "Please check your JSON Response String. It should not be an assoicative array at the root.";
             return false;
         }
-        
+
         // iterates over all JSON array elements insuring reqired keys are all there
         // and also that there aren't any un-supported keys
         foreach($jiraResponses as $line => $response){
@@ -165,30 +164,30 @@ class jiraSyncConfig extends PluginConfig{
                             . "please remove it. (Array is 0 based)", $line, $key);
                     return false;
                 }
-            }            
+            }
         }
-        
+
         // Makes sure the Jira ticket and jira status fields aren't the SAME!
         if($config['jira-ticket-var-id'] === $config['jira-status-var-id'])
         {
             $errors['err'] = "Your JIRA Ticket Number Field and JIRA Status Field cannot be the same.";
             return false;
         }
-        
+
         // Validates JIRA creds
         $jiraCredsCheckResults = $this->validateJiraCreds($config['jira-host'], $config['jira-user'], $config['jira-password']);
         if($jiraCredsCheckResults !== true){
             $errors['err'] = $jiraCredsCheckResults;
             return false;
         }
-        
+
         // Encrypts/saves password
         $config['jira-password'] = Crypto::encrypt($config['jira-password'],
                 SECRET_SALT);
-        
+
         return true;
      }
-     
+
       /**
          * This plug-in requires that you setup two "short answer" type fields
          * One to store the associated JIRA ticket number
@@ -200,7 +199,7 @@ class jiraSyncConfig extends PluginConfig{
         // this is the easiest way to get it :)
         $ticket_form = DynamicForm::objects()->filter(array('type'=>'T'))[0];
         $JiraFieldChoices = array();
-        
+
         foreach ($ticket_form->getDynamicFields() as $field) {
             // skipping built-in ticket fields
             if (in_array($field->getField()->getSelectName(), ['subject','message', 'priority'], true )){
@@ -214,33 +213,52 @@ class jiraSyncConfig extends PluginConfig{
             }
             // adds fields that qualify
             $JiraFieldChoices[$field->getField()->getId()] = $field->getField()->getLabel();
-            
+
         }
-        
+
         return $JiraFieldChoices;
-         
+
      }
-     
+
      function validateJiraCreds($jiraHost, $jiraUser, $jiraPassword) {
          try {
-             $board_service = new JiraRestApi\Board\BoardService(
-                     new JiraRestApi\Configuration\ArrayConfiguration(
-                             [
-                                 'jiraHost' => $jiraHost,
-                                 'jiraUser' => $jiraUser,
-                                 'jiraPassword' => $jiraPassword
-                             ]));
-             $board = $board_service->getBoardList();
-             return true;
-             } catch (JiraRestApi\JiraException $e) {
+            $curl = curl_init();
+
+            $basic_creds = base64_encode($jiraUser . ":" . $jiraPassword);
+
+            curl_setopt_array($curl, array(
+              CURLOPT_URL => sprintf('%s/rest/api/3/announcementBanner', $jiraHost),
+              CURLOPT_RETURNTRANSFER => true,
+              CURLOPT_ENCODING => '',
+              CURLOPT_MAXREDIRS => 10,
+              CURLOPT_TIMEOUT => 0,
+              CURLOPT_FOLLOWLOCATION => true,
+              CURLOPT_HTTP_VERSION => CURL_HTTP_VERSION_1_1,
+              CURLOPT_CUSTOMREQUEST => 'GET',
+              CURLOPT_HTTPHEADER => array(
+                'Authorization: Basic ' . $basic_creds,
+                'Content-Type: application/json'
+              ),
+            ));
+            
+            $response = curl_exec($curl);
+            $httpCode = curl_getinfo($curl, CURLINFO_HTTP_CODE);
+            curl_close($curl);
+            if ($httpCode === 200) {
+                return true;
+            } else {
+                return sprintf("The supplied JIRA credentials or Jira host do not seem to be correct. Please check and try again. HTTP CODE: %d Response: %s", $httpCode, $response);
+            }
+            
+             } catch (Exception $e) {
                  return sprintf("JIRA credentials failed with a  code %d and message:<br>".PHP_EOL." %s .",$e->getCode(),$e->getMessage());
              }
     }
-     
+
      function getOsTicketStatus() {
         $statuses = TicketStatusList::getStatuses();
         $status_choices = array();
-        
+
         foreach ($statuses as $status) {
             $status_choices[$status->getId()] = $status->getName();
         }
