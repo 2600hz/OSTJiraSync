@@ -317,7 +317,7 @@ class jiraSync extends Plugin {
                                         $ticket->status = $config->get('jira-ost-status');
                                         $ticket->save();
                                 }
-
+        Signal::send('new.jirasynced', array("ticket" => $ticket, "jira" => $currentJiraTicketNumber));
         // Send a webook if this is a previously unseen JIRA ticket
         // empty($previousJiraStatus) is included so that this isn't sent on every single status change :)
         // only on the original one
@@ -639,4 +639,3 @@ class jira_sync_lumberghs_strategies {
        );
      }
 }
-
